@@ -1,0 +1,227 @@
+{% extends 'stocks/base.html' %}
+
+{% block title %}ホーム - 株価予想アプリ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h2">
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                登録銘柄
+            </h1>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStockModal">
+                <i class="fas fa-plus me-1"></i>新しい銘柄を追加
+            </button>
+        </div>
+    </div>
+</div>
+
+{% if stock_data %}
+    <div class="row">
+        {% for item in stock_data %}
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="card stock-card h-100 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title mb-0">
+                                <a href="{% url 'stocks:stock_detail' item.stock.symbol %}" 
+                                   class="text-decoration-none">
+                                    {{ item.stock.symbol }}
+                                </a>
+                            </h5>
+                            <small class="text-muted">{{ item.stock.name }}</small>
+                            <!-- 検索リンク -->
+                            <div class="mt-1">
+                                <small class="text-muted">
+                                    🔍 検索: 
+                                    <a href="https://finance.yahoo.com/quote/{{ item.stock.symbol }}{% if item.stock.symbol|length == 4 and item.stock.symbol|floatformat:'0' != item.stock.symbol %}.T{% endif %}" 
+                                       target="_blank" class="text-decoration-none me-2" title="Yahoo Finance">
+                                        Yahoo
+                                    </a>
+                                    <a href="https://www.google.com/finance/quote/{{ item.stock.symbol }}:{% if item.stock.symbol|length == 4 and item.stock.symbol|floatformat:'0' != item.stock.symbol %}TYO{% else %}NASDAQ{% endif %}" 
+                                       target="_blank" class="text-decoration-none me-2" title="Google Finance">
+                                        Google
+                                    </a>
+                                    <a href="https://kabutan.jp/stock/?code={{ item.stock.symbol }}" 
+                                       target="_blank" class="text-decoration-none" title="株探（日本株）">
+                                        株探
+                                    </a>
+                                </small>
+                            </div>
+                        </div>
+                        <!-- 削除ボタン -->
+                        <button type="button" class="btn btn-outline-danger btn-sm delete-btn" 
+                                data-bs-toggle="modal" data-bs-target="#deleteModal{{ item.stock.symbol }}"
+                                title="銘柄を削除">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {% if item.latest_price %}
+                            <div class="row">
+                                <div class="col-6">
+                                    <h6 class="text-muted">最新価格</h6>
+                                    <h4 class="text-primary">¥{{ item.latest_price.close_price|floatformat:0 }}</h4>
+                                    <small class="text-muted">{{ item.latest_price.date }}</small>
+                                </div>
+                                <div class="col-6">
+                                    <h6 class="text-muted">出来高</h6>
+                                    <p class="mb-0">{{ item.latest_price.volume|floatformat:0 }}</p>
+                                </div>
+                            </div>
+                        {% else %}
+                            <p class="text-muted">価格データがありません</p>
+                        {% endif %}
+                        
+                        {% if item.latest_prediction %}
+                            <hr>
+                            <div class="prediction-info">
+                                <h6 class="text-muted">最新予想</h6>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="h5 mb-0">¥{{ item.latest_prediction.predicted_price|floatformat:0 }}</span>
+                                    <span class="badge bg-info prediction-badge">
+                                        信頼度: {{ item.latest_prediction.confidence|floatformat:1 }}%
+                                    </span>
+                                </div>
+                                <small class="text-muted">{{ item.latest_prediction.method }}</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer bg-white">
+                        <div class="btn-group w-100" role="group">
+                            <a href="{% url 'stocks:stock_detail' item.stock.symbol %}" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-chart-area me-1"></i>詳細
+                            </a>
+                            <a href="{% url 'stocks:prediction' item.stock.symbol %}" 
+                               class="btn btn-outline-success btn-sm">
+                                <i class="fas fa-crystal-ball me-1"></i>予想
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-chart-line text-muted" style="font-size: 4rem;"></i>
+        <h3 class="text-muted mt-3">銘柄が登録されていません</h3>
+        <p class="text-muted">新しい銘柄を追加して株価予想を始めましょう。</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStockModal">
+            <i class="fas fa-plus me-1"></i>最初の銘柄を追加
+        </button>
+    </div>
+{% endif %}
+
+<!-- 銘柄追加モーダル -->
+<div class="modal fade" id="addStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新しい銘柄を追加</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        {{ form.symbol.label_tag }}
+                        {{ form.symbol }}
+                        {% if form.symbol.help_text %}
+                            <div class="form-text">{{ form.symbol.help_text|safe }}</div>
+                        {% endif %}
+                        {% if form.symbol.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.symbol.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.name.label_tag }}
+                        {{ form.name }}
+                        {% if form.name.help_text %}
+                            <div class="form-text">{{ form.name.help_text|safe }}</div>
+                        {% endif %}
+                        {% if form.name.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.name.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.use_demo_data }}
+                            {{ form.use_demo_data.label_tag }}
+                        </div>
+                        {% if form.use_demo_data.help_text %}
+                            <div class="form-text">{{ form.use_demo_data.help_text|safe }}</div>
+                        {% endif %}
+                        {% if form.use_demo_data.errors %}
+                            <div class="text-danger small">
+                                {% for error in form.use_demo_data.errors %}
+                                    <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>追加
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 削除確認モーダル（各銘柄用） -->
+{% for item in stock_data %}
+    <div class="modal fade" id="deleteModal{{ item.stock.symbol }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        銘柄削除の確認
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>以下の銘柄を削除してもよろしいですか？</p>
+                    <div class="alert alert-warning">
+                        <strong>{{ item.stock.symbol }} - {{ item.stock.name }}</strong>
+                    </div>
+                    <p class="text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        関連する株価データと予想データもすべて削除されます。この操作は取り消せません。
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <form method="post" action="{% url 'stocks:delete_stock' item.stock.symbol %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-1"></i>削除する
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endfor %}
+{% endblock %} 

@@ -1,0 +1,204 @@
+{% extends 'stocks/base.html' %}
+
+{% block title %}{{ stock.name }} ({{ stock.symbol }}) 予想 - 株価予想アプリ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1">株価予想</h1>
+                <p class="text-muted mb-0">{{ stock.name }} ({{ stock.symbol }})</p>
+            </div>
+            <div>
+                <a href="{% url 'stocks:stock_detail' stock.symbol %}" class="btn btn-outline-secondary me-2">
+                    <i class="fas fa-arrow-left me-1"></i>詳細に戻る
+                </a>
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-crystal-ball me-1"></i>予想実行
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- 予想結果カード -->
+        {% if prediction_result %}
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-star me-2"></i>最新の予想結果
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h6 class="text-muted">予想価格</h6>
+                            <h3 class="text-success">¥{{ prediction_result.predicted_price|floatformat:0 }}</h3>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">信頼度</h6>
+                            <h4 class="text-info">{{ prediction_result.confidence|floatformat:1 }}%</h4>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">トレンド</h6>
+                            <h4 class="{% if prediction_result.trend == '上昇' %}text-success{% else %}text-danger{% endif %}">
+                                {{ prediction_result.trend }}
+                            </h4>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">予想手法</h6>
+                            <p class="mb-0">
+                                {% if prediction_result.best_model %}
+                                    🤖 {{ prediction_result.best_model }}
+                                {% else %}
+                                    📊 移動平均法
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <hr>
+                    {% if prediction_result.best_model %}
+                        <!-- 機械学習モデルの詳細 -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-muted">🤖 モデル精度</h6>
+                                <p class="mb-0">{{ prediction_result.model_accuracy|floatformat:4 }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-muted">📊 使用特徴量</h6>
+                                <p class="mb-0 small">RSI, MACD, 移動平均, ボラティリティ等</p>
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- 従来手法の詳細 -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-muted">5日移動平均</h6>
+                                <p class="mb-0">¥{{ prediction_result.ma_5|floatformat:0 }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-muted">20日移動平均</h6>
+                                <p class="mb-0">¥{{ prediction_result.ma_20|floatformat:0 }}</p>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- 過去の予想履歴 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history me-2"></i>予想履歴
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if past_predictions %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>予測日</th>
+                                    <th>予想価格</th>
+                                    <th>信頼度</th>
+                                    <th>手法</th>
+                                    <th>作成日時</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for prediction in past_predictions %}
+                                    <tr>
+                                        <td>{{ prediction.prediction_date }}</td>
+                                        <td><strong>¥{{ prediction.predicted_price|floatformat:0 }}</strong></td>
+                                        <td>
+                                            <span class="badge bg-info">{{ prediction.confidence|floatformat:1 }}%</span>
+                                        </td>
+                                        <td>{{ prediction.method }}</td>
+                                        <td>
+                                            <small class="text-muted">{{ prediction.created_at|date:"Y/m/d H:i" }}</small>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-crystal-ball text-muted" style="font-size: 3rem;"></i>
+                        <h5 class="text-muted mt-3">予想履歴がありません</h5>
+                        <p class="text-muted">「予想実行」ボタンをクリックして株価予想を開始してください。</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- 最新株価情報 -->
+        {% if recent_prices %}
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">最新株価情報</h5>
+                </div>
+                <div class="card-body">
+                    {% with latest=recent_prices.0 %}
+                        <div class="text-center mb-3">
+                            <h3 class="text-primary">¥{{ latest.close_price|floatformat:0 }}</h3>
+                            <small class="text-muted">{{ latest.date }}</small>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">高値</small>
+                                <p class="mb-0 trend-up">¥{{ latest.high_price|floatformat:0 }}</p>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">安値</small>
+                                <p class="mb-0 trend-down">¥{{ latest.low_price|floatformat:0 }}</p>
+                            </div>
+                        </div>
+                    {% endwith %}
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- 予想について -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>予想について
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>使用手法</h6>
+                <p class="small">
+                    🤖 機械学習モデル（LinearRegression）を使用した高度な予想<br>
+                    フォールバック: 改良移動平均法
+                </p>
+                
+                <h6>特徴量</h6>
+                <ul class="small">
+                    <li>移動平均（5日、10日、20日）</li>
+                    <li>RSI（相対力指数）</li>
+                    <li>MACD（移動平均収束拡散）</li>
+                    <li>ボラティリティ（価格変動率）</li>
+                    <li>ボリンジャーバンド位置</li>
+                    <li>出来高比率</li>
+                </ul>
+                
+                <h6>注意事項</h6>
+                <p class="small text-muted">
+                    この予想は機械学習アルゴリズムによるものですが、過去のデータに基づいた統計的予測です。
+                    市場の急変や突発的事象は予測できません。投資判断は自己責任で行ってください。
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

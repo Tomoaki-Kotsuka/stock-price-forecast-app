@@ -1,0 +1,278 @@
+{% extends 'stocks/base.html' %}
+
+{% block title %}{{ stock.name }} ({{ stock.symbol }}) - 株価予想アプリ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1">{{ stock.name }}</h1>
+                <p class="text-muted mb-0">{{ stock.symbol }} - {{ stock.exchange }}</p>
+                <!-- 検索リンク -->
+                <div class="mt-2">
+                    <span class="text-muted me-2">🔍 外部サイトで検索:</span>
+                    <a href="https://finance.yahoo.com/quote/{{ stock.symbol }}{% if stock.symbol|length == 4 and stock.symbol|floatformat:'0' != stock.symbol %}.T{% endif %}" 
+                       target="_blank" class="btn btn-outline-secondary btn-sm me-2" title="Yahoo Finance">
+                        <i class="fab fa-yahoo me-1"></i>Yahoo Finance
+                    </a>
+                    <a href="https://www.google.com/finance/quote/{{ stock.symbol }}:{% if stock.symbol|length == 4 and stock.symbol|floatformat:'0' != stock.symbol %}TYO{% else %}NASDAQ{% endif %}" 
+                       target="_blank" class="btn btn-outline-secondary btn-sm me-2" title="Google Finance">
+                        <i class="fab fa-google me-1"></i>Google Finance
+                    </a>
+                    <a href="https://kabutan.jp/stock/?code={{ stock.symbol }}" 
+                       target="_blank" class="btn btn-outline-secondary btn-sm" title="株探（日本株専用）">
+                        <i class="fas fa-chart-bar me-1"></i>株探
+                    </a>
+                </div>
+            </div>
+            <div>
+                <form method="post" action="{% url 'stocks:update_stock_data' stock.symbol %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-sync me-1"></i>データ更新
+                    </button>
+                </form>
+                <a href="{% url 'stocks:prediction' stock.symbol %}" class="btn btn-success me-2">
+                    <i class="fas fa-crystal-ball me-1"></i>予想実行
+                </a>
+                <button type="button" class="btn btn-outline-danger" 
+                        data-bs-toggle="modal" data-bs-target="#deleteStockModal"
+                        title="銘柄を削除">
+                    <i class="fas fa-trash me-1"></i>削除
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- 株価チャート -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>株価チャート（過去30日）
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="priceChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 価格履歴テーブル -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-table me-2"></i>価格履歴
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if prices %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>日付</th>
+                                    <th>始値</th>
+                                    <th>高値</th>
+                                    <th>安値</th>
+                                    <th>終値</th>
+                                    <th>出来高</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for price in prices %}
+                                    <tr>
+                                        <td>{{ price.date }}</td>
+                                        <td>¥{{ price.open_price|floatformat:0 }}</td>
+                                        <td class="trend-up">¥{{ price.high_price|floatformat:0 }}</td>
+                                        <td class="trend-down">¥{{ price.low_price|floatformat:0 }}</td>
+                                        <td><strong>¥{{ price.close_price|floatformat:0 }}</strong></td>
+                                        <td>{{ price.volume|floatformat:0 }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">価格データがありません。</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- 最新価格カード -->
+        {% if prices %}
+            {% with latest_price=prices.0 %}
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">最新価格</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="text-primary mb-3">¥{{ latest_price.close_price|floatformat:0 }}</h2>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">高値</small>
+                                <p class="mb-0 trend-up">¥{{ latest_price.high_price|floatformat:0 }}</p>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">安値</small>
+                                <p class="mb-0 trend-down">¥{{ latest_price.low_price|floatformat:0 }}</p>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="row">
+                            <div class="col-12">
+                                <small class="text-muted">出来高</small>
+                                <p class="mb-0">{{ latest_price.volume|floatformat:0 }}</p>
+                            </div>
+                        </div>
+                        <small class="text-muted">{{ latest_price.date }}</small>
+                    </div>
+                </div>
+            {% endwith %}
+        {% endif %}
+
+        <!-- 予想結果カード -->
+        {% if predictions %}
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">最新の予想</h5>
+                </div>
+                <div class="card-body">
+                    {% for prediction in predictions %}
+                        <div class="prediction-item {% if not forloop.first %}mt-3 pt-3 border-top{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">¥{{ prediction.predicted_price|floatformat:0 }}</h6>
+                                    <small class="text-muted">{{ prediction.prediction_date }}</small>
+                                </div>
+                                <span class="badge bg-info">
+                                    {{ prediction.confidence|floatformat:1 }}%
+                                </span>
+                            </div>
+                            <small class="text-muted">{{ prediction.method }}</small>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'stocks:prediction' stock.symbol %}" class="btn btn-success btn-sm w-100">
+                        <i class="fas fa-crystal-ball me-1"></i>予想の詳細を見る
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // チャート用データ
+    const chartData = {{ chart_data|safe }};
+    
+    if (chartData && chartData.dates && chartData.prices) {
+        // Chart.jsでチャートを作成
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.dates,
+                datasets: [{
+                    label: '終値',
+                    data: chartData.prices,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    title: {
+                        display: true,
+                        text: '株価チャート'
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '日付 (月/日)'
+                        },
+                        ticks: {
+                            maxRotation: 0,  // ラベルを回転させない
+                            minRotation: 0,
+                            autoSkip: false  // 自動的にラベルをスキップしない
+                        }
+                    },
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: '株価 (円)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '¥' + value.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+});
+</script>
+
+<!-- 削除確認モーダル -->
+<div class="modal fade" id="deleteStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                    銘柄削除の確認
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>以下の銘柄を削除してもよろしいですか？</p>
+                <div class="alert alert-warning">
+                    <strong>{{ stock.symbol }} - {{ stock.name }}</strong>
+                </div>
+                <p class="text-muted small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    関連する株価データと予想データもすべて削除されます。この操作は取り消せません。
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <form method="post" action="{% url 'stocks:delete_stock' stock.symbol %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-1"></i>削除する
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}株価予想アプリ{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 20px 0;
+        }
+        .stock-card {
+            transition: transform 0.2s;
+        }
+        .stock-card:hover {
+            transform: translateY(-5px);
+        }
+        .trend-up {
+            color: #28a745;
+        }
+        .trend-down {
+            color: #dc3545;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .prediction-badge {
+            font-size: 0.9em;
+        }
+        
+        /* ローディングオーバーレイ */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .delete-btn {
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        
+        .delete-btn:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- ナビゲーションバー -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'stocks:index' %}">
+                <i class="fas fa-chart-line me-2"></i>
+                株価予想アプリ
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'stocks:index' %}">
+                            <i class="fas fa-home me-1"></i>ホーム
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ローディングオーバーレイ -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h5 id="loadingMessage">データを更新しています...</h5>
+            <p class="text-muted mb-0">しばらくお待ちください</p>
+        </div>
+    </div>
+
+    <!-- メインコンテンツ -->
+    <div class="container mt-4">
+        <!-- メッセージ表示 -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    <!-- フッター -->
+    <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">&copy; 2024 株価予想アプリ. Built with Django & Bootstrap.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- ローディング表示用JavaScript -->
+    <script>
+        // ローディング表示関数
+        function showLoading(message = 'データを更新しています...') {
+            document.getElementById('loadingMessage').textContent = message;
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        
+        // データ更新ボタンにローディング表示を追加
+        document.addEventListener('DOMContentLoaded', function() {
+            // データ更新フォーム
+            const updateForms = document.querySelectorAll('form[action*="update-stock"]');
+            updateForms.forEach(form => {
+                form.addEventListener('submit', function() {
+                    showLoading('株価データを更新しています...');
+                });
+            });
+            
+            // 銘柄追加フォーム
+            const addStockForm = document.querySelector('#addStockModal form');
+            if (addStockForm) {
+                addStockForm.addEventListener('submit', function() {
+                    const symbol = document.querySelector('#id_symbol').value;
+                    const isDemo = document.querySelector('#id_use_demo_data').checked;
+                    if (isDemo) {
+                        showLoading(`${symbol} のデモデータを生成しています...`);
+                    } else {
+                        showLoading(`${symbol} の株価データを取得しています...`);
+                    }
+                });
+            }
+            
+            // 予想実行フォーム
+            const predictionForms = document.querySelectorAll('form[action*="prediction"]');
+            predictionForms.forEach(form => {
+                form.addEventListener('submit', function() {
+                    showLoading('株価予想を実行しています...');
+                });
+            });
+            
+            // 削除フォーム
+            const deleteForms = document.querySelectorAll('form[action*="delete-stock"]');
+            deleteForms.forEach(form => {
+                form.addEventListener('submit', function() {
+                    showLoading('銘柄を削除しています...');
+                });
+            });
+        });
+    </script>
+    
+    {% block extra_js %}
+    {% endblock %}
+</body>
+</html> 
